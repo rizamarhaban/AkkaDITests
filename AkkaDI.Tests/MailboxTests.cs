@@ -1,6 +1,7 @@
 ﻿using Akka.Actor;
 using Akka.Configuration;
 using Akka.DependencyInjection;
+using Akka.TestKit;
 using Akka.TestKit.NUnit;
 
 using AkkaDI.Examples.Actors;
@@ -52,8 +53,10 @@ public class MailboxTests : IDisposable
                 _actorSystem = ActorSystem.Create(GetType().Name, actorSystemSetup);
 
                 var testKit = new TestKit(_actorSystem);
+                var testProbe = testKit?.CreateTestProbe();
 
                 services.AddSingleton(testKit);
+                services.AddSingleton(testProbe);
             })
             .Build();
 
@@ -67,11 +70,12 @@ public class MailboxTests : IDisposable
     public void ScheduleTrackerMailbox_Should_Prioritize_Messages_Correctly()
     {
         var testKit = _host?.Services?.GetService<TestKit>();
-        var testProbe = testKit?.CreateTestProbe();
+        var testProbe = _host?.Services?.GetService<TestProbe>();
+        //var testProbe = testKit?.CreateTestProbe();
         var actorSystem = testKit?.Sys;
 
         var resolver = DependencyResolver.For(actorSystem);
-        var props = resolver.Props<GeneratorTestActor>([testProbe, nameof(GeneratorTestActor)])
+        var props = resolver.Props<GeneratorTestActor>([testProbe.Ref, nameof(GeneratorTestActor)])
             .WithMailbox("schedule-priority-mailbox");
         var actor = testKit?.ActorOfAsTestActorRef<GeneratorTestActor>(props, nameof(GeneratorTestActor));
         actor.Should().NotBeNull();
