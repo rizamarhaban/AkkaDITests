@@ -71,13 +71,13 @@ public class MailboxTests : IDisposable
     {
         var testKit = _host?.Services?.GetService<TestKit>();
         var testProbe = _host?.Services?.GetService<TestProbe>();
-        //var testProbe = testKit?.CreateTestProbe();
         var actorSystem = testKit?.Sys;
 
         var resolver = DependencyResolver.For(actorSystem);
-        var props = resolver.Props<GeneratorTestActor>([testProbe.Ref, nameof(GeneratorTestActor)])
+        var props = resolver.Props<GeneratorTestActor>([testProbe?.Ref, nameof(GeneratorTestActor)])
             .WithMailbox("schedule-priority-mailbox");
-        var actor = testKit?.ActorOfAsTestActorRef<GeneratorTestActor>(props, nameof(GeneratorTestActor));
+        var actor = testKit?
+            .ActorOfAsTestActorRef<GeneratorTestActor>(props, nameof(GeneratorTestActor));
         actor.Should().NotBeNull();
 
         // Define messages with different priorities
@@ -154,7 +154,8 @@ public class MailboxTests : IDisposable
         var resolver = DependencyResolver.For(actorSystem);
         var props = resolver.Props<GeneratorTestNoConstructorActor>()
             .WithMailbox("schedule-priority-mailbox");
-        var actor = testKit?.ActorOfAsTestActorRef<GeneratorTestNoConstructorActor>(props, nameof(GeneratorTestNoConstructorActor));
+        var actor = testKit?
+            .ActorOfAsTestActorRef<GeneratorTestNoConstructorActor>(props, nameof(GeneratorTestNoConstructorActor));
         actor.Should().NotBeNull();
 
         // Define messages with different priorities
