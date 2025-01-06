@@ -2,7 +2,11 @@
 using Akka.Dispatch;
 using Akka.Dispatch.MessageQueues;
 
+using AkkaDI.Examples.Commands;
+
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 
 namespace AkkaDI.Examples.CustomMailbox;
@@ -98,5 +102,15 @@ public class SchedulePriorityMessageQueue : IMessageQueue, IUnboundedMessageQueu
                 deadletters.Enqueue(owner, wrappedEnvelope.Envelope);
             }
         }
+    }
+
+    // Method to get the minimum timestamp of EventCommand messages
+    public TimeSpan? GetMinTimestamp()
+    {
+        return _queue
+            .Where(env => env.Envelope.Message is FakeScheduleCommand)
+            .Select(env => ((FakeScheduleCommand)env.Envelope.Message).Timestamp)
+            .DefaultIfEmpty(default)
+            .Min();
     }
 }

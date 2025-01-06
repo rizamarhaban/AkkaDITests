@@ -1,10 +1,16 @@
 ﻿using Akka.Actor;
+using Akka.Configuration;
+using Akka.DependencyInjection;
+using Akka.TestKit;
 using Akka.TestKit.NUnit;
 
 using AkkaDI.Examples.Actors;
 using AkkaDI.Examples.Commands;
 
 using FluentAssertions;
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 using System;
 using System.Collections.Generic;
@@ -13,27 +19,67 @@ using System.Linq;
 namespace AkkaDI.Tests;
 
 [TestFixture]
-public class MailboxNoDITests : TestKit
+public class InterleaveTests : IDisposable
 {
-    public MailboxNoDITests()
-       : base(@"akka {
-                     # Akka.NET settings
-                 }
-                 schedule-priority-mailbox {
-                     mailbox-type = ""AkkaDI.Examples.ScheduleTrackerMailbox, AkkaDI.Examples""
-                 }")
-    { }
+    private IServiceProvider? _serviceProvider;
+    private ActorSystem? _actorSystem;
+    private IHost _host;
+
+    [SetUp]
+    public void Setup()
+    {
+        _host = new HostBuilder()
+            .ConfigureServices((context, services) =>
+            {
+                _serviceProvider = services.BuildServiceProvider();
+
+                var bootstrap = BootstrapSetup.Create();
+
+                // enable DI support inside this ActorSystem, if needed
+                var diSetup = DependencyResolverSetup.Create(_serviceProvider);
+
+                var akkaConfig = ConfigurationFactory.ParseString(@"
+                    akka {
+                        # Adjust levels as desired for your test
+                        loglevel = INFO
+                        stdout-loglevel = INFO
+                        log-config-on-start = off
+                        # Use standard console logger or any other you prefer
+                        loggers = [""Akka.Event.StandardOutLogger, Akka""]
+                    }");
+
+                // merge this setup (and any others) together into ActorSystemSetup
+                var actorSystemSetup = bootstrap.WithConfig(akkaConfig).And(diSetup);
+
+                // start ActorSystem
+                _actorSystem = ActorSystem.Create(GetType().Name, actorSystemSetup);
+
+                var testKit = new TestKit(_actorSystem);
+                var testProbe = testKit?.CreateTestProbe();
+
+                services.AddSingleton(testKit);
+                services.AddSingleton(testProbe);
+            })
+            .Build();
+
+        _host.StartAsync();
+    }
+
+    [TearDown]
+    public void Dispose() => _host?.Dispose();
 
     [Test]
-    public void ScheduleTrackerMailbox_No_DI()
+    public void Actor_Should_Accumulate_Messages()
     {
-        // Arrange
-        var testProbe = CreateTestProbe();
+        var testKit = _host?.Services?.GetService<TestKit>();
+        var testProbe = _host?.Services?.GetService<TestProbe>();
+        var actorSystem = testKit?.Sys;
 
-        // Create the actor with the custom mailbox
-        var props = Props.Create(() => new GeneratorForNoDIActor(testProbe.Ref))
-            .WithMailbox("schedule-priority-mailbox");
-        var actor = Sys.ActorOf(props);
+        var resolver = DependencyResolver.For(actorSystem);
+        var props = resolver.Props<InterleaveActor>([testProbe?.Ref, nameof(InterleaveActor)]);
+        var actor = testKit?
+            .ActorOfAsTestActorRef<InterleaveActor>(props, nameof(InterleaveActor));
+        actor.Should().NotBeNull();
 
         // Define messages with different priorities
         var messages = new List<FakeScheduleCommand>
@@ -45,13 +91,12 @@ public class MailboxNoDITests : TestKit
             new(TimeSpan.FromSeconds(11), "Message E", isReExecute: false),
             new(TimeSpan.FromSeconds(4), "Message F", isReExecute: false),
             new(TimeSpan.FromSeconds(14), "Message F", isReExecute: true),
-            new(TimeSpan.FromSeconds(4), "Message G", isReExecute: true, isSelfMessage: true),
-            new(TimeSpan.FromSeconds(7), "Message H", isReExecute: false),
-            new(TimeSpan.FromSeconds(7), "Message I", isReExecute: true, isSelfMessage: true),
+            new(TimeSpan.FromSeconds(9), "Message G", isReExecute: true, isSelfMessage: true),
+            new(TimeSpan.FromSeconds(23), "Message H", isReExecute: false),
+            new(TimeSpan.FromSeconds(27), "Message I", isReExecute: true, isSelfMessage: true),
             new(TimeSpan.FromSeconds(8), "Message J", isReExecute: false),
         };
 
-        // Act
         // Send messages in a random order
         var random = new Random();
         var shuffledMessages = messages.Cast<IScheduleMessage>().OrderBy(x => random.Next()).ToList();
@@ -62,7 +107,7 @@ public class MailboxNoDITests : TestKit
 
         foreach (var msg in shuffledMessages)
         {
-            actor.Tell(msg);
+            actor?.Tell(msg);
         }
 
         // Collect processed messages
@@ -73,21 +118,20 @@ public class MailboxNoDITests : TestKit
             processedMessages.Add(processed);
         }
 
-        // Assert
-        // Expected processing order based on priority
+        // Assert: Expected processing order based on priority
         var expectedOrder = new List<string>
         {
             "Message D", // Timestamp = 00:00:02 (IsSelfMessage & IsReExecute)
-            "Message G", // Timestamp = 00:00:04 (IsSelfMessage & IsReExecute)
+            "Message G", // Timestamp = 00:00:05 (IsSelfMessage & IsReExecute)
             "Message I", // Timestamp = 00:00:07 (IsSelfMessage & IsReExecute)
             "Message F", // Timestamp = 00:00:14 (IsReExecute)
-            "Message F", // Timestamp = 00:00:04
-            "Message A", // Timestamp = 00:00:05
-            "Message H", // Timestamp = 00:00:07
-            "Message J", // Timestamp = 00:00:08
-            "Message E", // Timestamp = 00:00:11
-            "Message B", // Timestamp = 00:00:13
-            "Message C", // Timestamp = 00:00:17
+            "Message F", // Timestamp = 00:00:12
+            "Message A", // Timestamp = 00:00:19
+            "Message H", // Timestamp = 00:00:09
+            "Message J", // Timestamp = 00:00:10
+            "Message E", // Timestamp = 00:00:18
+            "Message B", // Timestamp = 00:00:23
+            "Message C", // Timestamp = 00:00:27
         };
 
         var actualOrder = processedMessages.Select(pm => pm.Message).ToList();

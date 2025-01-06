@@ -98,7 +98,10 @@ public class MailboxTests : IDisposable
 
         // Send messages in a random order
         var random = new Random();
-        var shuffledMessages = messages.OrderBy(x => random.Next()).ToList();
+        var shuffledMessages = messages
+            .Cast<IScheduleMessage>()
+            .OrderBy(x => random.Next())
+            .ToList();
 
         // Write the original message sequence
         TestContext.Out.WriteLine("Original Message Sequence");
@@ -184,7 +187,7 @@ public class MailboxTests : IDisposable
         }
     }
 
-    private void WriteMessages(List<FakeScheduleCommand?> messages)
+    private void WriteMessages(List<IScheduleMessage> messages)
     {
         if (messages is null)
             return;

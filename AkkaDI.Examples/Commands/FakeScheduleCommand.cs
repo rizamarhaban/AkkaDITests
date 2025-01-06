@@ -2,12 +2,13 @@
 
 namespace AkkaDI.Examples.Commands;
 
-public class FakeScheduleCommand
+public class FakeScheduleCommand : IScheduleMessage
 {
     public TimeSpan Timestamp { get; }
     public string Content { get; }
     public bool IsReExecute { get; }
     public bool IsSelfMessage { get; }
+    public bool IsProcessed { get; set; }
 
     public FakeScheduleCommand(TimeSpan timestamp, string content, bool isReExecute, bool isSelfMessage = false)
     {

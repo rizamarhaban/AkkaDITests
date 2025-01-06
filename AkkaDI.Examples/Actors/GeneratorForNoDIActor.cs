@@ -1,6 +1,7 @@
 ﻿using Akka.Actor;
 
 using AkkaDI.Examples.Commands;
+using AkkaDI.Examples.CustomMailbox;
 
 using System;
 
@@ -19,8 +20,14 @@ public class GeneratorForNoDIActor : ReceiveActor
             // Simulate processing delay if needed
             //System.Threading.Thread.Sleep(100);
 
+            var registry = EventCommandMailboxRegistry.For(Context.System);
+            var mailbox = registry.GetMailbox(Self);
+            var minTimestamp = mailbox?.GetMinTimestamp()!;
+
             // Notify the test probe
-            _testProbe.Tell(new ProcessedMessage(msg, DateTime.UtcNow));
+            if (minTimestamp.HasValue)
+                _testProbe.Tell(new ProcessedMessage(msg, minTimestamp.Value));
+
         });
     }
 }

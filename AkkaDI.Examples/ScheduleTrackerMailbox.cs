@@ -13,6 +13,9 @@ public class ScheduleTrackerMailbox : MailboxType, IProducesMessageQueue<Schedul
 
     public override IMessageQueue Create(IActorRef owner, ActorSystem system)
     {
-        return new SchedulePriorityMessageQueue();
+        // Register the custom mailbox with the extension
+        var messageQueue = new SchedulePriorityMessageQueue();
+        EventCommandMailboxRegistry.For(system).RegisterMailbox(owner, messageQueue);
+        return messageQueue;
     }
 }
