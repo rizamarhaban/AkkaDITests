@@ -24,7 +24,7 @@ public class GeneratorTestActor : ReceiveActor
             //System.Threading.Thread.Sleep(100);
 
             // Notify the test probe
-            _testProbe.Tell(new ProcessedMessage(msg, DateTime.UtcNow));
+            _testProbe.Tell(new ProcessedMessage(msg, TimeSpan.Zero));
         });
     }
 
