@@ -91,6 +91,9 @@ public class MailboxNoDITests : TestKit
         };
 
         var actualOrder = processedMessages.Select(pm => pm.Message).ToList();
+        var gvts = processedMessages.Select(pm => pm.MinTimestamp);
+        foreach (var gvt in gvts)
+            TestContext.Out.WriteLine($"GVT: {gvt}");
 
         // Write the actual message sequence
         TestContext.Out.WriteLine("\r\nReceived Message Sequence");
